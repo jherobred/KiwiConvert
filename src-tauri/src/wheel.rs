@@ -212,6 +212,14 @@ pub fn close(app: &AppHandle, reason: &str) {
     hide_later(app, generation, 320);
 }
 
+/// Closes a wheel that was opened by click (from the hub or "Open with") when the user
+/// clicks elsewhere. Drag wheels never take activation, so they are unaffected.
+pub fn close_if_click_mode(app: &AppHandle) {
+    if with(|s| s.open && s.click_mode && !s.finishing) {
+        close(app, "deactivated");
+    }
+}
+
 fn hide_later(app: &AppHandle, generation: u64, ms: u64) {
     let app = app.clone();
     std::thread::spawn(move || {
@@ -298,7 +306,21 @@ pub fn on_drop_event(app: &AppHandle, evt: DropEvt) -> bool {
             hover >= 0
         }
         DropEvt::Leave => {
-            close(app, "leave");
+            // OLE also reports a leave when the pointer crosses between the window and its
+            // WebView2 child. Only close once the pointer is really outside the wheel.
+            let app = app.clone();
+            let generation = with(|s| s.generation);
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(90));
+                let (x, y) = overlay::cursor_pos();
+                let outside = with(|s| {
+                    let (l, t, w, h) = s.rect;
+                    s.generation == generation && (x < l || y < t || x >= l + w || y >= t + h)
+                });
+                if outside {
+                    close(&app, "leave");
+                }
+            });
             false
         }
         DropEvt::Drop { x, y, .. } => {

@@ -1,6 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, on } from "../../lib/ipc";
 import { bytes } from "../../lib/format";
 import { spring } from "../../lib/motion";
@@ -79,17 +78,9 @@ export default function WheelApp() {
         api.wheelChoose(hover);
       }
     };
+    // Clicking elsewhere is handled in Rust through window activation.
     window.addEventListener("keydown", onKey);
-    // Focus can bounce while the window appears (a closing file dialog hands focus back to
-    // its owner), so blur only dismisses the wheel once it has settled.
-    const openedAt = performance.now();
-    const blur = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-      if (!focused && performance.now() - openedAt > 600) api.wheelClose("blur");
-    });
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      blur.then((f) => f());
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [clickMode, state?.open, options.length, hover, chosen, closing]);
 
   const visible = !!state?.open && !!state.files && !closing;

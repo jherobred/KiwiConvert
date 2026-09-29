@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { FolderOpen, History, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, on } from "../../lib/ipc";
@@ -17,7 +17,7 @@ function ago(ms: number): string {
   return new Date(ms).toLocaleDateString();
 }
 
-export function Home({ dialogOpen }: { dialogOpen: RefObject<boolean> }) {
+export function Home() {
   const [dragging, setDragging] = useState(false);
   const [history, setHistory] = useState<JobView[]>([]);
   const zone = useRef<HTMLDivElement>(null);
@@ -29,13 +29,7 @@ export function Home({ dialogOpen }: { dialogOpen: RefObject<boolean> }) {
   }, []);
 
   const choose = async () => {
-    dialogOpen.current = true;
-    let picked: string[] | string | null = null;
-    try {
-      picked = await open({ multiple: true, title: "Choose files to convert" });
-    } finally {
-      dialogOpen.current = false;
-    }
+    const picked = await open({ multiple: true, title: "Choose files to convert" });
     const paths = Array.isArray(picked) ? picked : picked ? [picked] : [];
     if (!paths.length || !zone.current) return;
     // Let focus return from the dialog before the wheel takes it.

@@ -1,7 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, Lock, Pause, Settings as SettingsIcon, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useEffect, useState } from "react";
 import { api, on } from "../../lib/ipc";
 import { spring } from "../../lib/motion";
 import { useSettings } from "../../lib/theme";
@@ -17,28 +16,17 @@ export default function HubApp() {
   const [view, setView] = useState<View>("home");
   const [paused, setPaused] = useState(false);
   const [shownAt, setShownAt] = useState(0);
-  const dialogOpen = useRef(false);
-  const lastShown = useRef(performance.now());
 
   useEffect(() => {
     if (settings && !settings.onboarded) setView("welcome");
   }, [settings]);
 
   useEffect(() => {
-    const win = getCurrentWindow();
+    // Hiding when another app is activated is handled in Rust.
     const subs = [
       on<void>("hub://settings", () => setView("settings")),
-      on<void>("hub://shown", () => {
-        lastShown.current = performance.now();
-        setShownAt(Date.now());
-      }),
+      on<void>("hub://shown", () => setShownAt(Date.now())),
       on<boolean>("app://paused", setPaused),
-      win.onFocusChanged(({ payload: focused }) => {
-        // Behaves like a flyout: clicking elsewhere hides it, except while a dialog is up.
-        // Focus can bounce while the window appears, so ignore the first moments.
-        const settled = performance.now() - lastShown.current > 700;
-        if (!focused && settled && !dialogOpen.current) api.hubHide();
-      }),
     ];
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && api.hubHide();
     window.addEventListener("keydown", onKey);
@@ -99,8 +87,8 @@ export default function HubApp() {
               exit={{ opacity: 0, x: view === "home" ? -24 : 24 }}
               transition={spring.soft}
             >
-              {view === "home" && <Home dialogOpen={dialogOpen} />}
-              {view === "settings" && settings && <SettingsView settings={settings} dialogOpen={dialogOpen} />}
+              {view === "home" && <Home />}
+              {view === "settings" && settings && <SettingsView settings={settings} />}
               {view === "welcome" && settings && <Welcome settings={settings} onDone={() => setView("home")} />}
             </motion.div>
           </AnimatePresence>

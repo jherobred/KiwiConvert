@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { FolderOpen } from "lucide-react";
@@ -6,7 +6,7 @@ import { api } from "../../lib/ipc";
 import type { AppInfo, Settings } from "../../lib/types";
 import { Button, Section, Segmented, Slider, Toggle } from "../../components/ui";
 
-export function SettingsView({ settings, dialogOpen }: { settings: Settings; dialogOpen: RefObject<boolean> }) {
+export function SettingsView({ settings }: { settings: Settings }) {
   const [autostart, setAutostart] = useState(false);
   const [info, setInfo] = useState<AppInfo | null>(null);
 
@@ -18,13 +18,8 @@ export function SettingsView({ settings, dialogOpen }: { settings: Settings; dia
   const set = (patch: Partial<Settings>) => api.setSettings({ ...settings, ...patch });
 
   const chooseFolder = async () => {
-    dialogOpen.current = true;
-    try {
-      const dir = await open({ directory: true, title: "Save converted files to" });
-      if (typeof dir === "string") set({ outputFolder: dir });
-    } finally {
-      dialogOpen.current = false;
-    }
+    const dir = await open({ directory: true, title: "Save converted files to" });
+    if (typeof dir === "string") set({ outputFolder: dir });
   };
 
   const toggleAutostart = async (on: boolean) => {

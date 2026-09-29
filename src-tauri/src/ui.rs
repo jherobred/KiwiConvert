@@ -1,13 +1,14 @@
 //! Window management. Every window loads the same frontend bundle, which routes on the
 //! window label: `wheel`, `activity`, `hub`, or `tool-<n>`.
 
+use crate::platform::activation::{self, When};
 use crate::platform::overlay;
 use crate::registry::Tool;
 use parking_lot::Mutex;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 pub const ACTIVITY_W: f64 = 392.0;
@@ -40,6 +41,12 @@ pub fn create_core_windows(app: &AppHandle) -> tauri::Result<()> {
         hwnd,
         std::sync::Arc::new(move |evt| crate::wheel::on_drop_event(&handle, evt)),
     );
+    // A wheel opened by click closes when the user clicks anywhere else.
+    let handle = app.clone();
+    activation::on_deactivate(hwnd, When::WindowDeactivated, move || {
+        let app = handle.clone();
+        std::thread::spawn(move || crate::wheel::close_if_click_mode(&app));
+    });
 
     let activity = builder(app, "activity")
         .inner_size(ACTIVITY_W, ACTIVITY_H)
@@ -70,6 +77,13 @@ pub fn create_core_windows(app: &AppHandle) -> tauri::Result<()> {
         hub_hwnd,
         std::sync::Arc::new(move |evt| crate::wheel::on_hub_drop(&handle, evt)),
     );
+    // Like a tray flyout, the hub hides when another program is activated. Our own dialogs,
+    // the wheel, and tool windows keep it open.
+    let handle = app.clone();
+    activation::on_deactivate(hub_hwnd, When::AppDeactivated, move || {
+        let app = handle.clone();
+        std::thread::spawn(move || auto_hide_hub(&app));
+    });
     Ok(())
 }
 
@@ -130,10 +144,31 @@ pub fn hide_activity(app: &AppHandle) {
 // Hub (tray panel)
 // ---------------------------------------------------------------------------------------
 
+static HUB_AUTO_HIDDEN_AT: AtomicU64 = AtomicU64::new(0);
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+fn auto_hide_hub(app: &AppHandle) {
+    if let Some(hub) = app.get_webview_window("hub") {
+        if hub.is_visible().unwrap_or(false) {
+            HUB_AUTO_HIDDEN_AT.store(now_ms(), Ordering::SeqCst);
+            let _ = hub.hide();
+        }
+    }
+}
+
 pub fn toggle_hub(app: &AppHandle, anchor: Option<(i32, i32)>) {
     let Some(hub) = app.get_webview_window("hub") else { return };
     if hub.is_visible().unwrap_or(false) {
         let _ = hub.hide();
+    } else if now_ms().saturating_sub(HUB_AUTO_HIDDEN_AT.load(Ordering::SeqCst)) < 400 {
+        // Clicking the tray icon deactivated the hub a moment ago, which hid it. That click
+        // meant "close", so don't reopen.
     } else {
         show_hub(app, anchor);
     }
