@@ -153,19 +153,28 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
+fn hub_visible(app: &AppHandle) -> bool {
+    app.get_webview_window("hub")
+        .and_then(|hub| hub.is_visible().ok())
+        .unwrap_or(false)
+}
+
+pub fn hide_hub(app: &AppHandle) {
+    if let Some(Ok(hwnd)) = app.get_webview_window("hub").map(|hub| hub.hwnd()) {
+        overlay::hide(hwnd);
+    }
+}
+
 fn auto_hide_hub(app: &AppHandle) {
-    if let Some(hub) = app.get_webview_window("hub") {
-        if hub.is_visible().unwrap_or(false) {
-            HUB_AUTO_HIDDEN_AT.store(now_ms(), Ordering::SeqCst);
-            let _ = hub.hide();
-        }
+    if hub_visible(app) {
+        HUB_AUTO_HIDDEN_AT.store(now_ms(), Ordering::SeqCst);
+        hide_hub(app);
     }
 }
 
 pub fn toggle_hub(app: &AppHandle, anchor: Option<(i32, i32)>) {
-    let Some(hub) = app.get_webview_window("hub") else { return };
-    if hub.is_visible().unwrap_or(false) {
-        let _ = hub.hide();
+    if hub_visible(app) {
+        hide_hub(app);
     } else if now_ms().saturating_sub(HUB_AUTO_HIDDEN_AT.load(Ordering::SeqCst)) < 400 {
         // Clicking the tray icon deactivated the hub a moment ago, which hid it. That click
         // meant "close", so don't reopen.
@@ -198,9 +207,7 @@ pub fn show_hub(app: &AppHandle, anchor: Option<(i32, i32)>) {
         )
     };
     log::debug!("showing hub at {x},{y} {w}x{h}");
-    overlay::show_at(hwnd, x, y, w, h);
-    let _ = hub.set_always_on_top(false);
-    let _ = hub.set_focus();
+    overlay::show_active(hwnd, x, y, w, h);
     let _ = tauri::Emitter::emit(&hub, "hub://shown", ());
 }
 
@@ -244,6 +251,8 @@ pub fn open_tool(app: &AppHandle, tool: Tool, paths: Vec<PathBuf>) {
         let _ = app.asset_protocol_scope().allow_file(p);
     }
     let (w, h) = tool_size(tool);
+    // The editor takes over from the hub.
+    hide_hub(app);
     let app = app.clone();
     // Window creation must not block the thread that received the drop.
     std::thread::spawn(move || {

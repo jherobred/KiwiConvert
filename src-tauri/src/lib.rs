@@ -34,6 +34,11 @@ fn file_args(args: &[String]) -> Vec<PathBuf> {
 }
 
 fn handle_launch(app: &tauri::AppHandle, args: &[String]) {
+    // The installer asks a running copy to quit before it replaces or removes the files.
+    if args.iter().any(|a| a == "--quit") {
+        app.exit(0);
+        return;
+    }
     let files = file_args(args);
     if files.is_empty() {
         ui::show_hub(app, None);
@@ -47,6 +52,14 @@ fn handle_launch(app: &tauri::AppHandle, args: &[String]) {
 }
 
 pub fn run() {
+    // A second launch (a desktop shortcut, "Open with") hands its files to the running
+    // instance and exits. Only this process may take the foreground, so let the running
+    // one bring its window forward.
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::UI::WindowsAndMessaging::{ASFW_ANY, AllowSetForegroundWindow};
+        let _ = AllowSetForegroundWindow(ASFW_ANY);
+    }
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| handle_launch(app, &args)))
         .plugin(tauri_plugin_autostart::init(
@@ -57,6 +70,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(jobs::JobManager::new())
         .setup(|app| {
+            // Reaching setup means no other copy was running, so there is nothing to quit.
+            if std::env::args().any(|a| a == "--quit") {
+                std::process::exit(0);
+            }
             let handle = app.handle().clone();
             logger::init(handle.path().app_log_dir().ok());
             log::info!("KiwiConvert {} starting", handle.package_info().version);

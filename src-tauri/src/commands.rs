@@ -195,9 +195,7 @@ pub fn activity_hide(app: AppHandle) {
 #[tauri::command]
 pub fn hub_hide(app: AppHandle) {
     log::debug!("hub hidden by the frontend");
-    if let Some(hub) = app.get_webview_window("hub") {
-        let _ = hub.hide();
-    }
+    crate::ui::hide_hub(&app);
 }
 
 /// Tool windows start hidden and call this once their first frame is painted.

@@ -157,7 +157,7 @@ pub fn open(app: &AppHandle, x: i32, y: i32, mode: Mode, click_mode: bool, paths
     emit_state(app);
     overlay::show_at(hwnd, rect.0, rect.1, rect.2, rect.3);
     if click_mode {
-        let _ = win.set_focus();
+        overlay::activate(hwnd);
     }
     // Moving between monitors with different scaling can resize the window after it is
     // placed. Put it back once the DPI change has been handled.

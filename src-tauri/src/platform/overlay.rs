@@ -4,10 +4,15 @@ use windows::Win32::Foundation::{HWND, POINT, RECT};
 use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromPoint};
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::WindowsAndMessaging::{
-    GWL_EXSTYLE, GetCursorPos, GetWindowLongPtrW, GetWindowRect, HWND_TOPMOST, SW_HIDE,
+    GWL_EXSTYLE, GetCursorPos, GetWindowLongPtrW, GetWindowRect, HWND_TOP, HWND_TOPMOST, SW_HIDE,
     SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW,
-    SetWindowLongPtrW, SetWindowPos, ShowWindow, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, ShowWindow, WS_EX_NOACTIVATE,
+    WS_EX_TOOLWINDOW,
 };
+
+// These windows are shown and hidden here rather than through tao, so tao's cached state
+// for them stays "hidden". Its `hide`, `set_focus` and `set_always_on_top` compare against
+// that cache and silently do nothing, so never call them on these windows.
 
 /// Keeps a window out of Alt+Tab and stops clicks on it from activating it.
 pub fn make_floating(hwnd: HWND, no_activate: bool) {
@@ -48,6 +53,22 @@ pub fn show_at(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) {
             h,
             SWP_NOACTIVATE | SWP_SHOWWINDOW,
         );
+    }
+}
+
+/// Shows an ordinary window at a physical-pixel rectangle and activates it.
+pub fn show_active(hwnd: HWND, x: i32, y: i32, w: i32, h: i32) {
+    unsafe {
+        let _ = SetWindowPos(hwnd, Some(HWND_TOP), x, y, w, h, SWP_SHOWWINDOW);
+    }
+    activate(hwnd);
+}
+
+/// Brings a visible window to the foreground. Windows allows this after a tray click, at
+/// startup, and when a second instance handed over its right to do so.
+pub fn activate(hwnd: HWND) {
+    unsafe {
+        let _ = SetForegroundWindow(hwnd);
     }
 }
 
