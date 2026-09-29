@@ -396,10 +396,68 @@ fn find_subslice(hay: &[u8], needle: &[u8]) -> Option<usize> {
     hay.windows(needle.len()).position(|w| w == needle)
 }
 
+/// Most attributes one tag may have in a PNG's text chunks before editing is refused.
+const MAX_XML_ATTRIBUTES: usize = 5_000;
+
+/// little_exif rewrites the XMP in PNG text chunks with quick-xml 0.37, which takes time
+/// quadratic in the number of attributes on one tag (RUSTSEC-2026-0194). Real XMP has at
+/// most a few hundred, so a file with far more was built to hang the job.
+fn check_png_text(data: &[u8]) -> Result<()> {
+    let mut pos = 8;
+    while let Some(header) = data.get(pos..pos + 8) {
+        let len = u32::from_be_bytes([header[0], header[1], header[2], header[3]]) as usize;
+        let Some(body) = data.get(pos + 8..pos + 8 + len) else { break };
+        let text = match &header[4..8] {
+            b"tEXt" => body.to_vec(),
+            b"zTXt" => inflate(body.splitn(2, |&b| b == 0).nth(1).and_then(|r| r.get(1..)).unwrap_or_default()),
+            b"iTXt" => {
+                // keyword \0 compressed method language \0 translated keyword \0 text
+                let rest = body.splitn(2, |&b| b == 0).nth(1).unwrap_or_default();
+                let compressed = rest.first() == Some(&1);
+                let text = rest.get(2..).unwrap_or_default().splitn(3, |&b| b == 0).nth(2).unwrap_or_default();
+                if compressed { inflate(text) } else { text.to_vec() }
+            }
+            _ => Vec::new(),
+        };
+        if most_attributes_in_a_tag(&text) > MAX_XML_ATTRIBUTES {
+            bail!("this PNG's embedded XML metadata is malformed, so KiwiConvert won't edit it");
+        }
+        pos += 12 + len;
+    }
+    Ok(())
+}
+
+fn inflate(data: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    // Real metadata is far smaller. The cap keeps a crafted chunk from filling memory.
+    let _ = flate2::read::ZlibDecoder::new(data).take(64 << 20).read_to_end(&mut out);
+    out
+}
+
+/// Counts `=` signs between `<` and `>`, an upper bound on the attributes of each tag.
+fn most_attributes_in_a_tag(xml: &[u8]) -> usize {
+    let (mut most, mut count, mut in_tag) = (0, 0, false);
+    for &b in xml {
+        match b {
+            b'<' => (in_tag, count) = (true, 0),
+            b'>' => in_tag = false,
+            b'=' if in_tag => {
+                count += 1;
+                most = most.max(count);
+            }
+            _ => {}
+        }
+    }
+    most
+}
+
 fn image_edit(path: &Path, edits: &BTreeMap<String, String>, remove_location: bool, out_dir: Option<&Path>) -> Result<PathBuf> {
     use little_exif::exif_tag::ExifTag;
     use little_exif::metadata::Metadata;
     let ext = ext_of(path);
+    if ext == "png" {
+        check_png_text(&std::fs::read(path)?)?;
+    }
     let out = naming::output_for(path, out_dir, if remove_location { "-no-location" } else { "-edited" }, &ext);
     write_atomic(&out, |tmp| {
         std::fs::copy(path, tmp)?;
@@ -541,5 +599,35 @@ mod tests {
         assert_eq!(human_size(512), "512 bytes");
         assert_eq!(human_size(2048), "2.0 KB");
         assert_eq!(human_size(5 * 1_048_576), "5.0 MB");
+    }
+
+    fn png_with_chunk(kind: &[u8; 4], body: &[u8]) -> Vec<u8> {
+        let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+        png.extend((body.len() as u32).to_be_bytes());
+        png.extend(kind);
+        png.extend(body);
+        png.extend([0; 4]);
+        png
+    }
+
+    fn xmp_tag(attributes: usize) -> Vec<u8> {
+        let attrs: String = (0..attributes).map(|i| format!(" a{i}=\"\"")).collect();
+        format!("XML:com.adobe.xmp\0<rdf:Description{attrs}/>").into_bytes()
+    }
+
+    #[test]
+    fn png_text_with_normal_xmp_is_accepted() {
+        assert!(check_png_text(&png_with_chunk(b"tEXt", &xmp_tag(40))).is_ok());
+    }
+
+    #[test]
+    fn png_text_built_to_hang_the_xml_parser_is_refused() {
+        assert!(check_png_text(&png_with_chunk(b"tEXt", &xmp_tag(6_000))).is_err());
+        // The same text, compressed in an iTXt chunk.
+        let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::fast());
+        z.write_all(&xmp_tag(6_000)[18..]).unwrap();
+        let mut body = b"XML:com.adobe.xmp\0\x01\x00\0\0".to_vec();
+        body.extend(z.finish().unwrap());
+        assert!(check_png_text(&png_with_chunk(b"iTXt", &body)).is_err());
     }
 }

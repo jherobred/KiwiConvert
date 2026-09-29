@@ -1,0 +1,10 @@
+# Advisories reviewed for KiwiConvert. Re-check these whenever little_exif updates.
+[advisories]
+ignore = [
+  # quick-xml 0.37.5, used only by little_exif, and only to rewrite XMP when EXIF is written
+  # to a PNG. engines::metadata::check_png_text refuses PNGs whose XML has a tag with more
+  # than 5,000 attributes before little_exif sees them, which bounds the quadratic check.
+  "RUSTSEC-2026-0194",
+  # NsReader memory exhaustion. little_exif uses quick_xml::Reader, not NsReader.
+  "RUSTSEC-2026-0195",
+]
