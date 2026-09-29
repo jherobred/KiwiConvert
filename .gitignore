@@ -3,6 +3,7 @@ node_modules/
 dist/
 src-tauri/target/
 src-tauri/gen/
+installer/target/
 
 # Native binaries fetched by scripts/fetch-binaries.ps1 (never committed)
 vendor/
