@@ -4,12 +4,11 @@
 use crate::platform::overlay;
 use crate::registry::Tool;
 use parking_lot::Mutex;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::time::Duration;
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 pub const ACTIVITY_W: f64 = 392.0;
 pub const ACTIVITY_H: f64 = 620.0;
@@ -78,33 +77,44 @@ pub fn create_core_windows(app: &AppHandle) -> tauri::Result<()> {
 // Activity window (job cards, bottom-right)
 // ---------------------------------------------------------------------------------------
 
-#[derive(Clone, Copy, Debug, Deserialize)]
-pub struct Region {
-    pub x: f64,
-    pub y: f64,
-    pub w: f64,
-    pub h: f64,
-}
+/// Height before the frontend has measured its first card.
+const ACTIVITY_START_H: f64 = 100.0;
 
 static ACTIVITY_VISIBLE: AtomicBool = AtomicBool::new(false);
-static REGIONS: Mutex<Vec<Region>> = parking_lot::const_mutex(Vec::new());
+/// Bottom-right corner of the work area the card stack is anchored to, and its scale.
+static ANCHOR: Mutex<Option<(i32, i32, f64)>> = parking_lot::const_mutex(None);
 
+/// The window is sized to fit its cards exactly, so it never blocks clicks on the screen
+/// around them.
 pub fn show_activity(app: &AppHandle) {
-    let Some(win) = app.get_webview_window("activity") else { return };
     if ACTIVITY_VISIBLE.swap(true, Ordering::SeqCst) {
         return;
     }
-    let Ok(hwnd) = win.hwnd() else { return };
     let (cx, cy) = overlay::cursor_pos();
     let m = overlay::monitor_at(cx, cy);
-    let w = (ACTIVITY_W * m.scale).round() as i32;
-    let h = (ACTIVITY_H * m.scale).round() as i32;
-    overlay::show_at(hwnd, m.work.right - w, m.work.bottom - h, w, h);
-    let _ = win.set_ignore_cursor_events(true);
-    std::thread::spawn({
-        let win = win.clone();
-        move || click_through_loop(win)
-    });
+    *ANCHOR.lock() = Some((m.work.right, m.work.bottom, m.scale));
+    place_activity(app, ACTIVITY_START_H);
+}
+
+/// Called by the frontend whenever the height of the card stack changes.
+pub fn resize_activity(app: &AppHandle, height: f64) {
+    if !ACTIVITY_VISIBLE.load(Ordering::SeqCst) {
+        return;
+    }
+    if height <= 0.0 {
+        hide_activity(app);
+    } else {
+        place_activity(app, height);
+    }
+}
+
+fn place_activity(app: &AppHandle, height: f64) {
+    let Some(win) = app.get_webview_window("activity") else { return };
+    let Ok(hwnd) = win.hwnd() else { return };
+    let Some((right, bottom, scale)) = *ANCHOR.lock() else { return };
+    let w = (ACTIVITY_W * scale).round() as i32;
+    let h = (height.clamp(1.0, ACTIVITY_H) * scale).round() as i32;
+    overlay::show_at(hwnd, right - w, bottom - h, w, h);
 }
 
 pub fn hide_activity(app: &AppHandle) {
@@ -112,33 +122,6 @@ pub fn hide_activity(app: &AppHandle) {
         ACTIVITY_VISIBLE.store(false, Ordering::SeqCst);
         if let Ok(hwnd) = win.hwnd() {
             overlay::hide(hwnd);
-        }
-    }
-}
-
-pub fn set_activity_regions(regions: Vec<Region>) {
-    *REGIONS.lock() = regions;
-}
-
-/// The activity window is mostly transparent. It only takes the mouse while the cursor is
-/// over a card, so the rest of the screen stays clickable.
-fn click_through_loop(win: WebviewWindow) {
-    let mut ignoring = true;
-    while ACTIVITY_VISIBLE.load(Ordering::SeqCst) {
-        std::thread::sleep(Duration::from_millis(30));
-        let Ok(hwnd) = win.hwnd() else { break };
-        let r = overlay::window_rect(hwnd);
-        let (cx, cy) = overlay::cursor_pos();
-        let scale = win.scale_factor().unwrap_or(1.0);
-        let lx = (cx - r.left) as f64 / scale;
-        let ly = (cy - r.top) as f64 / scale;
-        let inside = REGIONS
-            .lock()
-            .iter()
-            .any(|g| lx >= g.x && lx <= g.x + g.w && ly >= g.y && ly <= g.y + g.h);
-        if inside == ignoring {
-            ignoring = !inside;
-            let _ = win.set_ignore_cursor_events(ignoring);
         }
     }
 }
@@ -179,6 +162,7 @@ pub fn show_hub(app: &AppHandle, anchor: Option<(i32, i32)>) {
             (m.work.top + m.work.bottom - h) / 2,
         )
     };
+    log::debug!("showing hub at {x},{y} {w}x{h}");
     overlay::show_at(hwnd, x, y, w, h);
     let _ = hub.set_always_on_top(false);
     let _ = hub.set_focus();

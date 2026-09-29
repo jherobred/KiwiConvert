@@ -70,8 +70,11 @@ pub fn run() {
                 engines::pdf::init(resources);
             });
 
-            ui::create_core_windows(&handle)?;
+            // The tray first, so something is visible while the webviews start.
             tray::create(&handle)?;
+            let started = std::time::Instant::now();
+            ui::create_core_windows(&handle)?;
+            log::info!("windows ready in {} ms", started.elapsed().as_millis());
             wheel::start_gesture(&handle);
 
             let args: Vec<String> = std::env::args().collect();
@@ -104,7 +107,7 @@ pub fn run() {
             commands::run_convert,
             commands::run_tool,
             commands::open_tool,
-            commands::activity_regions,
+            commands::activity_resize,
             commands::activity_hide,
             commands::hub_hide,
             commands::window_ready,

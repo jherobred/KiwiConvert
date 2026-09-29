@@ -40,7 +40,7 @@ export const api = {
   runTool: (tool: Tool, paths: string[], options: unknown = null) => invoke<string>("run_tool", { tool, paths, options }),
   openTool: (tool: Tool, paths: string[]) => invoke<void>("open_tool", { tool, paths }),
 
-  activityRegions: (regions: { x: number; y: number; w: number; h: number }[]) => invoke<void>("activity_regions", { regions }),
+  activityResize: (height: number) => invoke<void>("activity_resize", { height }),
   activityHide: () => invoke<void>("activity_hide"),
   hubHide: () => invoke<void>("hub_hide"),
   windowReady: () => invoke<void>("window_ready"),

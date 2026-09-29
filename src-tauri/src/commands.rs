@@ -5,7 +5,7 @@ use crate::engines::{ffmpeg, image as img, media, metadata, pdf};
 use crate::jobs::{JobManager, JobOutcome, JobView};
 use crate::registry::{Fmt, Mode, Tool, WheelOption};
 use crate::settings::{Settings, SettingsStore};
-use crate::ui::{Region, ToolSession};
+use crate::ui::ToolSession;
 use crate::wheel::WheelPayload;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -183,8 +183,8 @@ pub fn open_tool(app: AppHandle, tool: Tool, paths: Vec<String>) -> CmdResult<()
 // --- windows -------------------------------------------------------------------------
 
 #[tauri::command]
-pub fn activity_regions(regions: Vec<Region>) {
-    crate::ui::set_activity_regions(regions);
+pub fn activity_resize(app: AppHandle, height: f64) {
+    crate::ui::resize_activity(&app, height);
 }
 
 #[tauri::command]
@@ -194,6 +194,7 @@ pub fn activity_hide(app: AppHandle) {
 
 #[tauri::command]
 pub fn hub_hide(app: AppHandle) {
+    log::debug!("hub hidden by the frontend");
     if let Some(hub) = app.get_webview_window("hub") {
         let _ = hub.hide();
     }
