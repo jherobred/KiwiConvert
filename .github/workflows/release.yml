@@ -1,0 +1,79 @@
+name: Release
+
+# Push a tag like v0.1.0 to build the installer and publish a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      # Optional. With these set, the app, uninstaller and installer are signed with Azure
+      # Trusted Signing. See docs/SIGNING.md.
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri
+            installer
+
+      - name: Cache FFmpeg and PDFium downloads
+        uses: actions/cache@v4
+        with:
+          path: vendor/.cache
+          key: engines-${{ hashFiles('scripts/fetch-binaries.ps1') }}
+
+      - name: Check the tag matches the app version
+        shell: pwsh
+        run: |
+          $version = (Get-Content -Raw src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          if ("v$version" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} doesn't match version $version in tauri.conf.json" }
+
+      - run: npm ci
+
+      - name: Set up code signing
+        if: env.AZURE_CLIENT_ID != ''
+        shell: pwsh
+        run: |
+          cargo install trusted-signing-cli --locked
+          $command = 'trusted-signing-cli -e ${{ vars.SIGNING_ENDPOINT }} -a ${{ vars.SIGNING_ACCOUNT }} -c ${{ vars.SIGNING_PROFILE }} -d KiwiConvert "%1"'
+          "KIWI_SIGN_COMMAND=$command" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - name: Build the installer
+        shell: pwsh
+        run: ./scripts/build-installer.ps1
+
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            # Published by hand already. Leave its files alone.
+            Write-Host "Release $tag exists, so this build only checks that it succeeds."
+            exit 0
+          }
+          gh release create $tag `
+            (Get-Item installer/target/dist/KiwiConvert-Setup-*.exe).FullName `
+            installer/target/dist/SHA256SUMS.txt `
+            scripts/install.ps1 `
+            --title "KiwiConvert $($tag.TrimStart('v'))" `
+            --generate-notes
