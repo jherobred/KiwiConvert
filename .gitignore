@@ -1,0 +1,26 @@
+# Dependencies and build output
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+
+# Native binaries fetched by scripts/fetch-binaries.ps1 (never committed)
+vendor/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log
+Thumbs.db
+Desktop.ini
+.DS_Store

@@ -1,0 +1,83 @@
+[package]
+name = "kiwiconvert"
+version = "0.1.0"
+description = "Convert files where you already are. Hold Shift while dragging a file in File Explorer."
+authors = ["KiwiConvert contributors"]
+license = "MIT"
+repository = "https://github.com/jherobred/KiwiConvert"
+edition = "2024"
+rust-version = "1.90"
+
+[lib]
+name = "kiwiconvert_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6", features = [] }
+
+[dependencies]
+anyhow = "1.0.104"
+base64 = "0.23.1"
+color_quant = "1"
+flate2 = "1.1.10"
+image = "0.25.10"
+img-parts = "0.4.0"
+jpeg-encoder = "0.7.1"
+kamadak-exif = "0.6.1"
+little_exif = "0.6.23"
+log = "0.4.34"
+lopdf = { version = "0.45.0", default-features = false, features = ["rayon"] }
+natord = "1.0.9"
+parking_lot = "0.12.5"
+pdfium-render = "0.9.4"
+png = "0.18"
+quick-xml = "0.42.0"
+rayon = "1.12.0"
+resvg = "0.48.1"
+rqrr = "0.11.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+tar = "0.4.46"
+tauri = { version = "2.12", features = ["tray-icon", "image-png", "protocol-asset"] }
+tauri-plugin-autostart = "2.6"
+tauri-plugin-dialog = "2.8"
+tauri-plugin-opener = "2.6"
+tauri-plugin-single-instance = "2.5"
+thiserror = "2.0.21"
+tiff = "0.11.3"
+unrar = "0.5.8"
+uuid = { version = "1.26.1", features = ["v4"] }
+visioncortex = "0.9.3"
+webp = "0.3.1"
+zip = "8.6.0"
+
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.39"
+windows-core = "0.62"
+windows = { version = "0.62", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_Graphics_Dwm",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Ole",
+  "Win32_System_SystemServices",
+  "Win32_System_Threading",
+  "Win32_UI_HiDpi",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_Shell",
+  "Win32_UI_Shell_Common",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+opt-level = 3
+strip = true
+
+# Image codecs are unusably slow without optimizations, so optimize dependencies in dev builds too.
+[profile.dev.package."*"]
+opt-level = 2
