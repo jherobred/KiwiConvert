@@ -4,6 +4,7 @@ import { Minus, Square, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useId, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { spring } from "../lib/motion";
+import kiwiUrl from "../assets/kiwi.png";
 
 export function Button({
   variant = "plain",
@@ -187,28 +188,16 @@ export function TitleBar({ title, subtitle, children }: { title: ReactNode; subt
   );
 }
 
-/** The kiwi slice mark used in headers. */
+/** The KiwiConvert logo (the same artwork as the app icon). */
 export function KiwiMark({ className, spin = false }: { className?: string; spin?: boolean }) {
-  const seeds = Array.from({ length: 10 }, (_, i) => i * 36);
   return (
-    <motion.svg
-      viewBox="0 0 64 64"
+    <motion.img
+      src={kiwiUrl}
+      alt=""
+      draggable={false}
       className={className}
       animate={spin ? { rotate: 360 } : undefined}
       transition={spin ? { duration: 18, repeat: Infinity, ease: "linear" } : undefined}
-    >
-      <circle cx="32" cy="32" r="31" fill="#6b4f31" />
-      <circle cx="32" cy="32" r="27.5" fill="#7cc23a" />
-      {seeds.map((a) => (
-        <line key={`l${a}`} x1="32" y1="32" x2={32 + 27 * Math.sin((a * Math.PI) / 180)} y2={32 - 27 * Math.cos((a * Math.PI) / 180)} stroke="#b9e27a" strokeWidth="1.4" />
-      ))}
-      {seeds.map((a) => {
-        const r = ((a + 18) * Math.PI) / 180;
-        const x = 32 + 16 * Math.sin(r);
-        const y = 32 - 16 * Math.cos(r);
-        return <ellipse key={a} cx={x} cy={y} rx="1.6" ry="3.2" fill="#1d1812" transform={`rotate(${a + 18} ${x} ${y})`} />;
-      })}
-      <circle cx="32" cy="32" r="9.5" fill="#f4f1d6" />
-    </motion.svg>
+    />
   );
 }
