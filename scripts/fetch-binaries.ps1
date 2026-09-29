@@ -66,16 +66,23 @@ if ($Force -or -not (Test-Path (Join-Path $ffmpegOut "ffmpeg.exe"))) {
   Remove-Item -Recurse -Force $tmp
 }
 
-# PDFium: a single DLL.
+# PDFium: a single DLL, plus one notice file holding the licenses of PDFium and every
+# library built into it.
 $pdfiumOut = Join-Path $vendor "pdfium"
-if ($Force -or -not (Test-Path (Join-Path $pdfiumOut "pdfium.dll"))) {
+$pdfiumNotice = Join-Path $pdfiumOut "LICENSE.txt"
+$noticeStale = -not (Test-Path $pdfiumNotice) -or -not (Select-String -Quiet -SimpleMatch "==== pdfium.txt" $pdfiumNotice)
+if ($Force -or $noticeStale -or -not (Test-Path (Join-Path $pdfiumOut "pdfium.dll"))) {
   $archive = Get-Verified $packages[1]
   $tmp = Join-Path $cache "pdfium-extract"
   Expand-To $archive $tmp
   if (Test-Path $pdfiumOut) { Remove-Item -Recurse -Force $pdfiumOut }
   New-Item -ItemType Directory -Force -Path $pdfiumOut | Out-Null
   Copy-Item (Join-Path $tmp "bin\pdfium.dll") $pdfiumOut
-  Copy-Item (Join-Path $tmp "LICENSE") (Join-Path $pdfiumOut "LICENSE.txt")
+  $notice = Get-Content -Raw (Join-Path $tmp "LICENSE")
+  foreach ($file in Get-ChildItem (Join-Path $tmp "licenses") -File | Sort-Object Name) {
+    $notice += "`n`n==== $($file.Name) ====`n`n" + (Get-Content -Raw $file.FullName)
+  }
+  [IO.File]::WriteAllText($pdfiumNotice, $notice)
   Remove-Item -Recurse -Force $tmp
 }
 
