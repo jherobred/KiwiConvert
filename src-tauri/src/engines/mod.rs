@@ -35,7 +35,27 @@ pub fn write_atomic(final_path: &Path, write: impl FnOnce(&Path) -> Result<()>) 
         }
         Err(e) => {
             let _ = std::fs::remove_file(&tmp);
+            if access_denied(&e) {
+                let dir = final_path.parent().unwrap_or(final_path);
+                bail!(
+                    "Windows didn't let KiwiConvert save in {}. If Controlled folder access is on, \
+                     allow KiwiConvert.exe and ffmpeg.exe from KiwiConvert's install folder in \
+                     Windows Security > Virus & threat protection > Ransomware protection.",
+                    dir.display()
+                );
+            }
             Err(e)
         }
     }
+}
+
+/// True when writing failed because Windows refused access, which is what Controlled folder
+/// access does to apps it doesn't trust. FFmpeg reports it as text.
+fn access_denied(e: &anyhow::Error) -> bool {
+    e.chain().any(|cause| {
+        cause
+            .downcast_ref::<std::io::Error>()
+            .is_some_and(|io| io.kind() == std::io::ErrorKind::PermissionDenied)
+            || cause.to_string().contains("Permission denied")
+    })
 }
