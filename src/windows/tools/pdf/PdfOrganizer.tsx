@@ -41,14 +41,21 @@ function Thumb({ path, index, rotate, aspect }: { path: string; index: number; r
       io.disconnect();
     };
   }, [path, index]);
-  const sideways = rotate % 2 !== 0;
+  // The box keeps the page's shape and is turned as a whole. A quarter turn swaps its width
+  // and height on screen, so its height may not exceed the cell's width (75% of its height).
+  const size =
+    rotate % 2 !== 0
+      ? { height: `${Math.min(75, 100 / aspect)}%` }
+      : aspect > 0.75
+        ? { width: "100%" }
+        : { height: "100%" };
   return (
     <div ref={ref} className="grid aspect-[3/4] w-full place-items-center">
       <motion.div
         animate={{ rotate: rotate * 90 }}
         transition={spring.soft}
         className="overflow-hidden rounded-md bg-white shadow-md ring-1 ring-black/10"
-        style={sideways ? { height: "100%", aspectRatio: `${1 / aspect}` } : { width: aspect > 0.75 ? "100%" : undefined, height: aspect > 0.75 ? undefined : "100%", aspectRatio: `${aspect}` }}
+        style={{ ...size, aspectRatio: `${aspect}` }}
       >
         {src ? <img src={src} alt="" draggable={false} className="size-full object-contain" /> : <div className="size-full animate-pulse bg-sunken" />}
       </motion.div>
