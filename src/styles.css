@@ -1,0 +1,152 @@
+@import "tailwindcss";
+
+/* Dark mode follows the data-theme attribute set from Settings (or the system theme). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme {
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, monospace;
+
+  --color-kiwi-50: #f3faea;
+  --color-kiwi-100: #e3f4cc;
+  --color-kiwi-200: #c9e99d;
+  --color-kiwi-300: #a9d965;
+  --color-kiwi-400: #8cc83c;
+  --color-kiwi-500: #71ad22;
+  --color-kiwi-600: #578a18;
+  --color-kiwi-700: #436916;
+  --color-kiwi-800: #375416;
+  --color-kiwi-900: #2f4717;
+  --color-kiwi-950: #16270a;
+
+  --color-gold-100: #fdf5d3;
+  --color-gold-300: #f5d86a;
+  --color-gold-400: #efc53c;
+  --color-gold-500: #dea91f;
+  --color-gold-700: #8e6112;
+
+  --color-skin-400: #9b7a4f;
+  --color-skin-500: #7d5e3a;
+  --color-skin-700: #4e3a24;
+  --color-seed: #1d1812;
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Semantic colors that change with the theme. */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-sunken: var(--sunken);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-danger: var(--danger);
+}
+
+:root {
+  --canvas: #f6f7f2;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --sunken: #eef0e8;
+  --line: rgb(30 40 20 / 0.1);
+  --ink: #1b2114;
+  --ink-2: #4c5642;
+  --ink-3: #7c8672;
+  --accent: #5f9a17;
+  --accent-ink: #ffffff;
+  --danger: #c2372f;
+  --shadow-panel: 0 18px 50px -12px rgb(20 30 10 / 0.35), 0 2px 8px rgb(20 30 10 / 0.12);
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --canvas: #0e110c;
+  --surface: #161a13;
+  --raised: #1d2219;
+  --sunken: #0b0d09;
+  --line: rgb(220 240 200 / 0.09);
+  --ink: #eef3e8;
+  --ink-2: #b4bea9;
+  --ink-3: #7d8873;
+  --accent: #8cc83c;
+  --accent-ink: #10180a;
+  --danger: #ff6b5f;
+  --shadow-panel: 0 18px 50px -12px rgb(0 0 0 / 0.7), 0 2px 8px rgb(0 0 0 / 0.4);
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  overflow: hidden;
+  font-size: 14px;
+}
+
+/* Floating windows (wheel, activity, hub) are transparent; tool windows are opaque. */
+body.transparent,
+body.transparent #root {
+  background: transparent;
+}
+
+body.opaque {
+  background: var(--canvas);
+}
+
+input,
+textarea,
+select {
+  user-select: text;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--accent) 35%, transparent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Slim scrollbars that match the panels. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--ink) 25%, transparent) transparent;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-panel);
+}
+
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
