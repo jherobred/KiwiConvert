@@ -153,6 +153,7 @@ pub fn open(app: &AppHandle, x: i32, y: i32, mode: Mode, click_mode: bool, paths
         s.scale = scale;
     });
     overlay::make_floating(hwnd, !click_mode);
+    log::debug!("wheel opening at {x},{y} (click mode: {click_mode})");
     emit_state(app);
     overlay::show_at(hwnd, rect.0, rect.1, rect.2, rect.3);
     if click_mode {
@@ -202,6 +203,7 @@ pub fn close(app: &AppHandle, reason: &str) {
         Some(s.generation)
     });
     let Some(generation) = generation else { return };
+    log::debug!("wheel {generation} closing: {reason}");
     let _ = app.emit_to(
         "wheel",
         "wheel://close",

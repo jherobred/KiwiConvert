@@ -5,21 +5,34 @@ use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, M
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::WindowsAndMessaging::{
     GWL_EXSTYLE, GetCursorPos, GetWindowLongPtrW, GetWindowRect, HWND_TOPMOST, SW_HIDE,
-    SWP_NOACTIVATE, SWP_SHOWWINDOW, SetWindowLongPtrW, SetWindowPos, ShowWindow, WS_EX_NOACTIVATE,
-    WS_EX_TOOLWINDOW,
+    SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW,
+    SetWindowLongPtrW, SetWindowPos, ShowWindow, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
 };
 
 /// Keeps a window out of Alt+Tab and stops clicks on it from activating it.
 pub fn make_floating(hwnd: HWND, no_activate: bool) {
     unsafe {
-        let mut ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-        ex |= WS_EX_TOOLWINDOW.0 as isize;
+        let before = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+        let mut ex = before | WS_EX_TOOLWINDOW.0 as isize;
         if no_activate {
             ex |= WS_EX_NOACTIVATE.0 as isize;
         } else {
             ex &= !(WS_EX_NOACTIVATE.0 as isize);
         }
-        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex);
+        if ex != before {
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex);
+            // Style changes are cached until the frame is recalculated. Without this the
+            // window briefly grows a tool-window caption.
+            let _ = SetWindowPos(
+                hwnd,
+                None,
+                0,
+                0,
+                0,
+                0,
+                SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+            );
+        }
     }
 }
 
