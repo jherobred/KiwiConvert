@@ -155,6 +155,9 @@ pub fn page_texts(input: &Path) -> Result<Vec<String>> {
 pub fn to_text(span: &Span, input: &Path, out_dir: Option<&Path>) -> Result<PathBuf> {
     let texts = page_texts(input)?;
     span.progress(0.8);
+    if texts.iter().all(|t| t.trim().is_empty()) {
+        bail!("This PDF has no selectable text (it may be scanned images). Try PDF to JPG or PNG instead.");
+    }
     let body = texts
         .iter()
         .map(|t| t.replace("\r\n", "\n").trim_end().to_string())

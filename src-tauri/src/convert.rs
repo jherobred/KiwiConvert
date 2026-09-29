@@ -92,6 +92,10 @@ pub fn convert_one(span: &Span, input: &Path, to: Fmt, settings: &Settings, dir:
         (Kind::Subtitle, _) => one(subtitles::convert(span, input, to, dir)),
         (Kind::Archive, Fmt::Extract) => one(archive::extract(span, input, dir)),
         (Kind::Archive, Fmt::Zip | Fmt::Tar | Fmt::Tgz) => one(archive::repack(span, input, to, dir)),
+        (_, Fmt::Zip | Fmt::Tar | Fmt::Tgz) => {
+            let out = naming::output_for(input, dir, "", to.ext());
+            one(archive::create(span, &[input.to_path_buf()], to, &out))
+        }
         (_, Fmt::Gz) => one(archive::gzip(span, input, dir)),
         _ => bail!("KiwiConvert can't convert this file to {}.", to.label()),
     }

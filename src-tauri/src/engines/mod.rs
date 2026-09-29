@@ -13,6 +13,9 @@ pub mod qr;
 pub mod subtitles;
 pub mod trace;
 
+#[cfg(test)]
+mod matrix_tests;
+
 use anyhow::{Result, bail};
 use std::path::{Path, PathBuf};
 

@@ -65,9 +65,18 @@ pub fn load(path: &Path) -> Result<Loaded> {
 fn load_heif(path: &Path) -> Result<Loaded> {
     let data = std::fs::read(path)?;
     let meta = heif::read_meta(&data).unwrap_or_default();
-    let png = ffmpeg::capture(args![
-        "-noautorotate", "-i", path, "-frames:v", "1", "-f", "image2pipe", "-c:v", "png", "pipe:1"
-    ])?;
+    // Transparency is stored as a second, grayscale image; merge it back when present.
+    let has_alpha_plane = ffmpeg::probe(path)
+        .map(|p| p.streams.iter().filter(|s| s.codec_type == "video").count() > 1)
+        .unwrap_or(false);
+    let png = if has_alpha_plane {
+        ffmpeg::capture(args![
+            "-noautorotate", "-i", path, "-filter_complex", "[0:v:0][0:v:1]alphamerge,format=rgba", "-frames:v", "1",
+            "-f", "image2pipe", "-c:v", "png", "pipe:1"
+        ])?
+    } else {
+        ffmpeg::capture(args!["-noautorotate", "-i", path, "-frames:v", "1", "-f", "image2pipe", "-c:v", "png", "pipe:1"])?
+    };
     let mut img = image::load_from_memory_with_format(&png, ImageFormat::Png)
         .context("FFmpeg could not decode this image")?;
     let rotate = |img: DynamicImage| match meta.rotation {
@@ -145,8 +154,21 @@ pub fn reset_orientation(exif: &mut [u8]) {
     }
 }
 
+/// True when some pixel is not fully opaque. An alpha channel alone doesn't count: many
+/// decoders produce RGBA for opaque images.
+pub fn has_transparency(img: &DynamicImage) -> bool {
+    match img {
+        DynamicImage::ImageRgba8(i) => i.as_raw().chunks_exact(4).any(|p| p[3] < 255),
+        DynamicImage::ImageLumaA8(i) => i.as_raw().chunks_exact(2).any(|p| p[1] < 255),
+        DynamicImage::ImageRgba16(i) => i.as_raw().chunks_exact(4).any(|p| p[3] < u16::MAX),
+        DynamicImage::ImageLumaA16(i) => i.as_raw().chunks_exact(2).any(|p| p[1] < u16::MAX),
+        DynamicImage::ImageRgba32F(i) => i.as_raw().chunks_exact(4).any(|p| p[3] < 1.0),
+        _ => false,
+    }
+}
+
 fn flatten(img: &DynamicImage) -> image::RgbImage {
-    if !img.color().has_alpha() {
+    if !has_transparency(img) {
         return img.to_rgb8();
     }
     let rgba = img.to_rgba8();
@@ -210,7 +232,7 @@ pub fn png_bytes(img: &DynamicImage, meta: &Meta, best: bool) -> Result<Vec<u8>>
 }
 
 pub fn webp_bytes(img: &DynamicImage, quality: Option<u8>, meta: &Meta) -> Result<Vec<u8>> {
-    let img = if img.color().has_alpha() {
+    let img = if has_transparency(img) {
         DynamicImage::ImageRgba8(img.to_rgba8())
     } else {
         DynamicImage::ImageRgb8(img.to_rgb8())
@@ -252,7 +274,7 @@ fn gif_bytes(img: &DynamicImage) -> Result<Vec<u8>> {
 
 fn bmp_bytes(img: &DynamicImage) -> Result<Vec<u8>> {
     let mut out = Vec::new();
-    if img.color().has_alpha() {
+    if has_transparency(img) {
         let rgba = img.to_rgba8();
         image::codecs::bmp::BmpEncoder::new(&mut out).encode(rgba.as_raw(), rgba.width(), rgba.height(), ExtendedColorType::Rgba8)?;
     } else {
@@ -308,13 +330,14 @@ fn ico_bytes(img: &DynamicImage) -> Result<Vec<u8>> {
 /// AVIF through FFmpeg's libaom encoder, keeping transparency as an alpha plane.
 fn avif_file(img: &DynamicImage, quality: u8, out: &Path) -> Result<()> {
     let tmp = std::env::temp_dir().join(format!("kiwi-{}.png", uuid::Uuid::new_v4().simple()));
-    let alpha = img.color().has_alpha();
+    let alpha = has_transparency(img);
     std::fs::write(&tmp, png_bytes(img, &Meta { icc: None, exif: None }, false)?)?;
     let crf = (60.0 - quality as f64 * 0.5).clamp(8.0, 55.0).round() as u32;
     let mut a = args!["-y", "-i", &tmp];
     if alpha {
+        // AVIF keeps transparency as a second, grayscale image.
         a.extend(args![
-            "-filter_complex", "[0:v]format=rgba,split[c][a];[c]format=yuv420p[main];[a]alphaextract,format=gray[alpha]",
+            "-filter_complex", "[0:v]format=yuva420p,split[main][alpha];[alpha]alphaextract[alpha]",
             "-map", "[main]", "-map", "[alpha]"
         ]);
     } else {
@@ -463,7 +486,7 @@ pub fn compress_format(input: &Path, img: &DynamicImage, o: &CompressOptions) ->
     match Fmt::from_ext(&ext_of(input)) {
         Some(f @ (Fmt::Jpg | Fmt::Webp | Fmt::Heic | Fmt::Avif | Fmt::Png)) => f,
         // Formats without lossy compression become JPEG (or PNG to keep transparency).
-        _ if img.color().has_alpha() => Fmt::Png,
+        _ if has_transparency(img) => Fmt::Png,
         _ => Fmt::Jpg,
     }
 }

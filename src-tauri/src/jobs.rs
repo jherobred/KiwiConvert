@@ -64,13 +64,40 @@ struct Job {
 /// Handed to job bodies for progress reporting and cancellation checks.
 pub struct Ctx {
     job: Arc<Job>,
-    app: AppHandle,
+    /// None only in tests, which run engines without a window.
+    app: Option<AppHandle>,
     last_emit: Mutex<Instant>,
 }
 
 impl Ctx {
     pub fn app(&self) -> &AppHandle {
-        &self.app
+        self.app.as_ref().expect("this step needs the running app")
+    }
+
+    /// A context with no app attached, for exercising engines in tests.
+    #[cfg(test)]
+    pub fn detached() -> Self {
+        Ctx {
+            job: Arc::new(Job {
+                view: Mutex::new(JobView {
+                    id: "test".into(),
+                    title: String::new(),
+                    detail: String::new(),
+                    status: JobStatus::Running,
+                    progress: 0.0,
+                    stage: None,
+                    outputs: vec![],
+                    text: None,
+                    error: None,
+                    input: None,
+                    started_ms: 0,
+                    finished_ms: None,
+                }),
+                cancel: AtomicBool::new(false),
+            }),
+            app: None,
+            last_emit: Mutex::new(Instant::now()),
+        }
     }
 
     pub fn cancelled(&self) -> bool {
@@ -107,7 +134,9 @@ impl Ctx {
 
     fn emit_now(&self) {
         let view = self.job.view.lock().clone();
-        let _ = self.app.emit("jobs://update", view);
+        if let Some(app) = &self.app {
+            let _ = app.emit("jobs://update", view);
+        }
     }
 }
 
@@ -320,7 +349,7 @@ impl JobManager {
                 gate.acquire();
                 let ctx = Ctx {
                     job: job.clone(),
-                    app: app.clone(),
+                    app: Some(app.clone()),
                     last_emit: Mutex::new(Instant::now() - Duration::from_secs(1)),
                 };
                 {
