@@ -1,0 +1,15 @@
+name: Feature request
+description: A format, tool or improvement you'd like.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What do you want to do?
+      description: Describe the task, for example "turn a folder of scans into one PDF".
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How could KiwiConvert help?
