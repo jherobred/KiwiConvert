@@ -134,12 +134,23 @@ select {
   box-shadow: var(--shadow-panel);
 }
 
-.drag-region {
-  -webkit-app-region: drag;
+.kiwi-range::-webkit-slider-runnable-track {
+  background: transparent;
 }
 
-.no-drag {
-  -webkit-app-region: no-drag;
+.kiwi-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35), 0 0 0 1px rgb(0 0 0 / 0.08);
+  transition: transform 0.12s var(--ease-out-quint);
+}
+
+.kiwi-range:active::-webkit-slider-thumb {
+  transform: scale(1.18);
 }
 
 @media (prefers-reduced-motion: reduce) {
